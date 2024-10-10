@@ -93,7 +93,7 @@ async function filePaths(folderPath, prefix = '', isLast = true, accumulator = {
         return accumulator;
     }
 
-    // Define patterns to ignore
+    // here is the file extensions that will  be ignored, if you want to ignore any file just add it to the array
     const ignorePatterns = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'ico', 'zip', 'tar', 'gz', 'git', 'gitignore','mod','vscode','db','sum'];
 
     // Filter out ignored files and sort directories first
