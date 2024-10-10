@@ -1,6 +1,7 @@
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
+const clipboardy = require('clipboardy');
 
 /**
  * @param {vscode.ExtensionContext} context
@@ -24,8 +25,9 @@ function activate(context) {
                     console.log(`Folder: ${folderPath}`);
 
                     // Read the files in the folder using fs.promises for better async handling
-                    filePaths(folderPath);
-                    
+                    let result = await filePaths(folderPath);
+                    clipboardy.writeSync(result);
+                    outputChannel.appendLine(`Done! Copied to clipboard.`);
                     outputChannel.show(true); 
                 }
             } else {
@@ -36,7 +38,6 @@ function activate(context) {
             console.error(error);
         }
     });
-
     context.subscriptions.push(listFiles);
 
     const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -73,6 +74,7 @@ async function readFile(filePath) {
 
 
 async function filePaths(folderPath) {
+    let result = "";
     const ignorePatterns = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'ico', 'zip', 'tar', 'gz', 'git', 'gitignore','mod','vscode'];
     const files = await fs.promises.readdir(folderPath);
     if (files.length === 0) {
@@ -90,18 +92,20 @@ async function filePaths(folderPath) {
         }
         if (stat.isDirectory()) {
             
-            console.log(`Folder: ${filePath}\n`);
+            result += `Folder: ${filePath}\n`;
             await filePaths(filePath);
         } else {
             try {
                 const data = await readFile(filePath); 
-                console.log(`Data from ${file}\n: ${data}\n\n`);
+                result += `Data from ${file}:\n ${data}\n\n------------------------------------------------\n\n`
             } catch (error) {
                 console.error(`Error reading file ${file}:`, error);
+                vscode.window.showErrorMessage(`Error reading file ${file}: ${error.message}`);
             }
         }
        
     }
+    return result;
 }
 
 function getFileExtension(filename) {
