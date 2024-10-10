@@ -24,45 +24,21 @@ function activate(context) {
                     console.log(`Folder: ${folderPath}`);
 
                     // Read the files in the folder using fs.promises for better async handling
-                    const files = await fs.promises.readdir(folderPath);
-                    console.log(`Files: ${files}`);
+                    filePaths(folderPath);
                     
-                    if (files.length === 0) {
-                        vscode.window.showInformationMessage(`The folder "${folder.name}" is empty.`);
-                        continue; // Move to the next folder if available
-                    }
-
-                    // Clear the output channel and append new data
-                    outputChannel.clear();
-                    outputChannel.appendLine(`Files in ${folderPath}:`);
-                    outputChannel.appendLine('---------------------------');
-                    
-                    for (const file of files) {
-                        let filePath = path.join(folderPath, file);
-                        try {
-                            const data = await readFile(filePath); // Await the promise
-                            console.log(`Data from ${file}: ${data}`);
-                        } catch (error) {
-                            console.error(`Error reading file ${file}:`, error);
-                        }
-                        outputChannel.appendLine(file);
-                    }
-                    
-                    outputChannel.show(true); // Preserve focus if desired
+                    outputChannel.show(true); 
                 }
             } else {
                 vscode.window.showWarningMessage('No workspace folder is open.');
             }
         } catch (error) {
             vscode.window.showErrorMessage(`An unexpected error occurred: ${error.message}`);
-            console.error(error); // Log the error for debugging purposes
+            console.error(error);
         }
     });
 
-    // Add the listFiles command to the context's subscriptions
     context.subscriptions.push(listFiles);
 
-    // (Optional) Add a status bar item for quick access to the List Files command
     const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     statusBarItem.command = 'copy-ls.listFiles';
     statusBarItem.text = '$(file-directory) List Files';
@@ -91,4 +67,43 @@ async function readFile(filePath) {
             }
         });
     });
+}
+
+
+
+
+async function filePaths(folderPath) {
+    const ignorePatterns = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'ico', 'zip', 'tar', 'gz', 'git', 'gitignore','mod','vscode'];
+    const files = await fs.promises.readdir(folderPath);
+    if (files.length === 0) {
+        vscode.window.showInformationMessage(`The folder is empty.`);
+        return; // Move to the next folder if available
+    }
+
+    for (const file of files) {
+        let filePath = path.join(folderPath, file);
+        let stat = await fs.promises.stat(filePath);
+         const fileExtension = getFileExtension(file);
+
+        if(ignorePatterns.includes(fileExtension)) {
+            continue;
+        }
+        if (stat.isDirectory()) {
+            
+            console.log(`Folder: ${filePath}\n`);
+            await filePaths(filePath);
+        } else {
+            try {
+                const data = await readFile(filePath); 
+                console.log(`Data from ${file}\n: ${data}\n\n`);
+            } catch (error) {
+                console.error(`Error reading file ${file}:`, error);
+            }
+        }
+       
+    }
+}
+
+function getFileExtension(filename) {
+    return filename.split('.').pop();
 }
