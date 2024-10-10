@@ -2,13 +2,14 @@ const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
 const clipboardy = require('clipboardy');
+let folderStructure = '';
 
 /**
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
     console.log('Extension "copy-ls" is now active.');
-
+    
     // Create the output channel once and reuse it
     const outputChannel = vscode.window.createOutputChannel('List Files');
     context.subscriptions.push(outputChannel);
@@ -22,11 +23,11 @@ function activate(context) {
                 // Iterate through all workspace folders (handles multi-root workspaces)
                 for (const folder of workspaceFolders) {
                     const folderPath = folder.uri.fsPath;
-                    console.log(`Folder: ${folderPath}`);
+                    outputChannel.appendLine(`Listing files in: ${folderPath}`);
 
                     // Read the files in the folder using fs.promises for better async handling
                     let result = await filePaths(folderPath);
-                    clipboardy.writeSync(result);
+                    clipboardy.writeSync(result.folderStructure+"\n----------------------------------------------\n"+result.result);
                     outputChannel.appendLine(`Done! Copied to clipboard.`);
                     outputChannel.show(true); 
                 }
@@ -71,41 +72,75 @@ async function readFile(filePath) {
 }
 
 
+async function filePaths(folderPath, prefix = '', isLast = true, accumulator = { folderStructure: '', result: '' }) {
+    const basename = path.basename(folderPath);
+    accumulator.folderStructure += `${prefix}${isLast ? '└── ' : '├── '}${basename}/\n`;
 
+    // Update the prefix for the next level
+    const newPrefix = prefix + (isLast ? '    ' : '│   ');
 
-async function filePaths(folderPath) {
-    let result = "";
-    const ignorePatterns = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'ico', 'zip', 'tar', 'gz', 'git', 'gitignore','mod','vscode'];
-    const files = await fs.promises.readdir(folderPath);
-    if (files.length === 0) {
-        vscode.window.showInformationMessage(`The folder is empty.`);
-        return; // Move to the next folder if available
+    let files;
+    try {
+        files = await fs.promises.readdir(folderPath);
+    } catch (error) {
+        console.error(`Error reading directory ${folderPath}:`, error);
+        vscode.window.showErrorMessage(`Error reading directory ${folderPath}: ${error.message}`);
+        return accumulator;
     }
 
-    for (const file of files) {
-        let filePath = path.join(folderPath, file);
-        let stat = await fs.promises.stat(filePath);
-         const fileExtension = getFileExtension(file);
+    if (files.length === 0) {
+        vscode.window.showInformationMessage(`The folder ${folderPath} is empty.`);
+        return accumulator;
+    }
 
-        if(ignorePatterns.includes(fileExtension)) {
+    // Define patterns to ignore
+    const ignorePatterns = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'ico', 'zip', 'tar', 'gz', 'git', 'gitignore','mod','vscode','db','sum'];
+
+    // Filter out ignored files and sort directories first
+    const filteredFiles = files.filter(file => {
+        const ext = getFileExtension(file);
+        return !ignorePatterns.includes(ext);
+    }).sort((a, b) => {
+        const aPath = path.join(folderPath, a);
+        const bPath = path.join(folderPath, b);
+        const aIsDir = fs.statSync(aPath).isDirectory();
+        const bIsDir = fs.statSync(bPath).isDirectory();
+        if (aIsDir && !bIsDir) return -1;
+        if (!aIsDir && bIsDir) return 1;
+        return a.localeCompare(b);
+    });
+
+    for (let i = 0; i < filteredFiles.length; i++) {
+        const file = filteredFiles[i];
+        const filePath = path.join(folderPath, file);
+        let stat;
+        try {
+            stat = await fs.promises.stat(filePath);
+        } catch (error) {
+            console.error(`Error stating file ${filePath}:`, error);
+            vscode.window.showErrorMessage(`Error accessing ${filePath}: ${error.message}`);
             continue;
         }
+
+        const isLastItem = i === filteredFiles.length - 1;
+
         if (stat.isDirectory()) {
-            
-            result += `Folder: ${filePath}\n`;
-            await filePaths(filePath);
+            // Recursively process subdirectories
+            await filePaths(filePath, newPrefix, isLastItem, accumulator);
         } else {
+            // Add file to the structure
+            accumulator.folderStructure += `${newPrefix}${isLastItem ? '└── ' : '├── '}${file}\n`;
             try {
-                const data = await readFile(filePath); 
-                result += `Data from ${file}:\n ${data}\n\n------------------------------------------------\n\n`
+                const data = await fs.promises.readFile(filePath, 'utf8'); 
+                accumulator.result += `Data from ${file}:\n${data}\n\n------------------------------------------------\n\n`;
             } catch (error) {
-                console.error(`Error reading file ${file}:`, error);
-                vscode.window.showErrorMessage(`Error reading file ${file}: ${error.message}`);
+                console.error(`Error reading file ${filePath}:`, error);
+                vscode.window.showErrorMessage(`Error reading file ${filePath}: ${error.message}`);
             }
         }
-       
     }
-    return result;
+
+    return accumulator;
 }
 
 function getFileExtension(filename) {
