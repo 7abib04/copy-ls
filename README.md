@@ -16,7 +16,7 @@
   
 - **Status Bar Integration**: Adds a convenient status bar item for quick access to the "List Files" command.
 
-![copy-ls Feature](images/copy-ls-feature.png)
+![copy-ls Feature](image.png)
 
 > **Tip**: Utilize the extension's capabilities to document your project structure effortlessly, making onboarding and project reviews smoother!
 
